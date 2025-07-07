@@ -1,0 +1,92 @@
+#include “thingProperties.h"
+// Local Variables
+int pulse = 0;
+int av = 0;
+unsigned long int count = 0;
+bool isMeasuring = false;
+int uf = 0, lf = 0;
+unsigned long startTime;
+unsigned long lastPeakTime = 0;
+unsigned long currentPeakTime = 0;
+int peakToPeakInterval = 0;
+int lastPeakToPeakInterval = 0;
+bool isPeak = false;
+void setup() {
+ Serial.begin(9600); // Start serial communication
+ delay(1500);
+
+ startTime = millis();
+ // Initialize thingProperties
+ initProperties();
+
+ ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+ setDebugMessageLevel(2);
+ ArduinoCloud.printDebugInfo();
+}
+void onHrChange() {
+ Serial.println("HR changed");
+}
+void onResetChange() {
+ Serial.println("Reset changed");
+}
+void loop() {
+ ArduinoCloud.update(); // Sync with IoT Cloud
+ av = analogRead(34); // Read sensor value from analog pin 34
+ sense = av * (3.3 / 4096); // Convert sensor value to voltage
+ //Serial.print("Voltage = ");
+ //Serial.println(sense);
+ if (sense >= 0.5) {
+ uf = 1;
+ //Serial.println("Above threshold - potential peak");
+ // Check if this is a new peak
+ if (lf == 1 && !isPeak) {
+ isPeak = true;
+ currentPeakTime = millis();
+ // Calculate peak-to-peak interval (in milliseconds)
+ if (lastPeakTime > 0) {
+ peakToPeakInterval = currentPeakTime - lastPeakTime;
+ hrv = peakToPeakInterval; // Store in cloud variable
+ Serial.print("Peak to peak interval (ms): ");
+ Serial.println(peakToPeakInterval);
+ Serial.print("HRV Value: ");
+ Serial.println(hrv);
+ Serial.flush();
+
+ }
+ lastPeakTime = currentPeakTime;
+ }
+ }
+ if (sense < 0.1) {
+ lf = 1;
+ isPeak = false;
+ //Serial.println("Below threshold - potential valley");
+ }
+ // Increment count if both up and down signal detected
+ if (uf == 1 && lf == 1) {
+
+ count++;
+ pcount = count;
+ uf = lf = 0;
+ }
+ // If the 60-second period has passed, update the heart rate
+ if (millis() - startTime >= 60000 || reset==0) {
+ hr = count; // Directly assign the count to heart rate variable
+ pulse = count; // Directly assign count to pulse, no need to
+declare it locally
+ Serial.print("Heart Rate: ");
+ Serial.println(hr);
+
+ // Reset counters
+ count = 0;
+ pcount = 0;
+ startTime = millis();
+ //break;// Reset start time for next 60 seconds
+ }
+}
+void onSenseChange() {}
+void onHrvChange() {
+ Serial.println("HRV updated: " + String(hrv) + " ms");
+}
+void onNameChange() {}
+void onDcountChange() {}
+void onPcountChange() {}
